@@ -1,0 +1,55 @@
+Напомним, что вам предстоит выяснить, от каких самых малоприбыльных рейсов из Анапы мы можем отказаться в зимнее время. Вы не знаете, по каким критериям ваше руководство будет отбирать рейсы, поэтому решаете собрать как можно больше информации, содержащейся в вашей базе, в один датасет. 
+
+Исходя из того, что прибыльность рейса — это разница между доходом от продаж билетов и расходом на полет, соберите такой датасет, который позволит оценить эти цифры. 
+
+Самая простая модель оценки прибыльности: стоимость билетов - стоимость топлива на рейс (для оценки последнего вам необходим километраж рейса или длительность полета), но вы можете предложить другую модель.
+
+Ваш датасет должен обязательно включать id рейса и города вылета (Анапа) и прилета. Он также  может включать такие данные, как модель самолёта и его характеристики, суммарную стоимость всех билетов на рейсе, затраченное время в полёте и прочее — на ваше усмотрение.
+
+WITH total_price as
+(
+SELECT 
+    distinct f.flight_id,
+    t.fare_conditions,
+    t.amount,
+    count(f.flight_id) count_ticket,
+    count(f.flight_id)*t.amount sum_price
+FROM dst_project.flights f 
+   JOIN dst_project.ticket_flights t on f.flight_id=t.flight_id
+GROUP BY 1,2,3
+ORDER BY 3 desc
+),
+places as
+(
+select 
+    count(s.seat_no) seats_count,
+    s.aircraft_code
+FROM dst_project.seats s
+GROUP BY s.aircraft_code
+)
+SELECT 
+    distinct f.flight_id,
+    f.departure_airport,
+    f.arrival_airport,
+    f.actual_departure,
+    f.actual_arrival,
+    f.status,
+    a.city departure_city,
+    aa.city arriving_city,
+    p.seats_count,
+    sum(tp.count_ticket) sum_count_ticket,
+    ac.model,
+    sum(tp.sum_price) as proceed,
+    EXTRACT('hour' from (f.actual_arrival-f.actual_departure))+
+    EXTRACT('minute' from (f.actual_arrival-f.actual_departure))/60 as delta_hour
+FROM total_price tp
+    JOIN dst_project.flights f on tp.flight_id=f.flight_id
+    JOIN dst_project.airports a on f.departure_airport=a.airport_code
+    JOIN dst_project.airports aa on f.arrival_airport=aa.airport_code
+    JOIN dst_project.aircrafts ac on f.aircraft_code=ac.aircraft_code
+    JOIN places p on f.aircraft_code=p.aircraft_code
+WHERE f.departure_airport = 'AAQ'
+  AND (date_trunc('month', f.scheduled_departure) in ('2017-01-01','2017-02-01', '2017-12-01'))
+  AND f.status not in ('Cancelled')
+group by 1,2,3,4,5,6,7,8,9,11
+order by 12 desc
